@@ -1,0 +1,22 @@
+{
+  "name": "webwx",
+  "version": "1.0.0",
+  "description": "Just do it.",
+  "main": "weixin.js",
+  "dependencies": {
+    "axios": "^0.18.0",
+    "node-axios-cookiejar": "0.0.3",
+    "qrcode-terminal": "^0.12.0",
+    "tough-cookie": "^2.4.2",
+    "tough-cookie-filestore": "0.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "weixin"
+  ],
+  "author": "wl",
+  "license": "ISC"
+}
