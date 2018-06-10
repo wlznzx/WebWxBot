@@ -6,6 +6,12 @@ const qrcode = require('qrcode-terminal');
 const querystring = require("querystring");
 const axios = require('axios');
 const request_info = require("./request_info");
+const url = require('url');
+const path = require('path');
+const FileCookieStore = require('tough-cookie-filestore');
+const axiosCookieJarSupport = require('node-axios-cookiejar');
+const touch = require('touch');
+const tough = require('tough-cookie');
 
 const {
   getUrls, CODES, SP_ACCOUNTS, PUSH_HOST_LIST,
@@ -13,6 +19,10 @@ const {
 
 let URLS = getUrls({});
 
+
+const cookiePath = path.join(process.cwd(), '.cookie.json');
+touch.sync(cookiePath);
+const jar = new tough.CookieJar(new FileCookieStore(cookiePath));
 
 const req = axios.create({
   timeout: 35e3,
@@ -23,12 +33,15 @@ const req = axios.create({
   //     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2652.0 Safari/537.36',
   //   'Referer': 'https://wx2.qq.com/',
   // },
+  jar,
   withCredentials: true,
   xsrfCookieName: null,
   xsrfHeaderName: null,
   httpAgent: new http.Agent({ keepAlive: true }),
   httpsAgent: new https.Agent({ keepAlive: true }),
 });
+
+axiosCookieJarSupport(req);
 
 const makeDeviceID = () => 'e' + Math.random().toFixed(15).toString().substring(2, 17);
 
@@ -49,24 +62,52 @@ class wx{
 	    this.deviceid = makeDeviceID();
 
 	    // member store
-	    this.Members = new Datastore();
-	    this.Contacts = new Datastore();
-	    this.Groups = new Datastore();
-	    this.GroupMembers = new Datastore();
-	    this.Brands = new Datastore(); // 公众帐号
-	    this.SPs = new Datastore(); // 特殊帐号
+	    // this.Members = new Datastore();
+	    // this.Contacts = new Datastore();
+	    // this.Groups = new Datastore();
+	    // this.GroupMembers = new Datastore();
+	    // this.Brands = new Datastore(); // 公众帐号
+	    // this.SPs = new Datastore(); // 特殊帐号
 
-	    // indexing
-	    this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // // indexing
+	    // this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
 
 	    clearTimeout(this.checkSyncTimer);
 	    clearInterval(this.updataContactTimer);
   	}
   	// Step 1 获取UUID.
+  	async fetchUUID() {
+    let result;
+    try {
+      result = await req.get(URLS.API_jsLogin, {
+        params: {
+          appid: 'wx782c26e4c19acffb',
+          fun: 'new',
+          lang: 'zh_CN',
+          _: +new Date,
+        },
+      });
+    } catch (e) {
+      console.log('fetch uuid network error', e);
+      // network error retry
+      return await this.fetchUUID();
+    }
+
+    const { data } = result;
+
+    if (!/uuid = "(.+)";$/.test(data)) {
+      throw new Error('get uuid failed');
+    }
+
+    const uuid = data.match(/uuid = "(.+)";$/)[1];
+    return uuid;
+  	}
+
+  	/*
   	async fetchUUID() {
   			let p =  new Promise(function(resolve, reject){
 	        //做一些异步操作
@@ -83,6 +124,7 @@ class wx{
 	    
 	    this.uuid = await p;
   	}
+  	*/
 
   	// Step 2 显示二维码;
   	async showQRCODE(){
@@ -94,6 +136,8 @@ class wx{
   	}
 
   	// Step 3 等待扫码;
+
+  	/*
   	async checkLoginStep() {
   		let params = querystring.stringify({
 		    tip:1,
@@ -108,7 +152,6 @@ class wx{
 		    headers: request_info.headers
 		};
   		console.log(params);
-  		/**/
 	    let p = new Promise(function(resolve, reject){
 	        //做一些异步操作
 	        function _login(argument) {
@@ -127,44 +170,58 @@ class wx{
 	    });
 	    return p;
   	}
-/*
-	async fetchTickets() {
-  		let url = this.redirectUri;
-	    let p = new Promise(function(resolve, reject){
-	        const req = https.get(url, (res) => {
-				res.on('data', (d) => {
-				var data = d.toString();
-				    resolve(data);
-				});
-			});
-			req.on('error', (e) => {
-				console.error(e);
-				reject(e);
-			});
-			req.end();
-	    });
-	    let ticket_data = await p;
-	    if(null != ticket_data){
-	    	const skeyM = ticket_data.match(/<skey>(.*)<\/skey>/);
-		    const wxsidM = ticket_data.match(/<wxsid>(.*)<\/wxsid>/);
-		    const wxuinM = ticket_data.match(/<wxuin>(.*)<\/wxuin>/);
-		    const passTicketM = ticket_data.match(/<pass_ticket>(.*)<\/pass_ticket>/);
-		    // const redirectUrl = data.match(/<redirect_url>(.*)<\/redirect_url>/);
-		    this.skey = skeyM && skeyM[1];
-		    this.sid = wxsidM && wxsidM[1];
-		    this.uin = wxuinM && wxuinM[1];
-		    this.passTicket = passTicketM && passTicketM[1];
+  	*/
 
-	    	this.baseRequest = {
-		      Uin: parseInt(this.uin, 10),
-		      Sid: this.sid,
-		      Skey: this.skey,
-		      DeviceID: this.deviceid,
-		    };
+  	async checkLoginStep() {
+    let result;
+
+	    try {
+	      result = await req.get(URLS.API_login, {
+	        params: {
+	          tip: 1,
+	          uuid: this.uuid,
+	          _: +new Date,
+	        },
+	      });
+	    } catch (e) {
+	      console.log('checkLoginStep network error', e);
+	      await this.checkLoginStep();
+	      return;
 	    }
-	}
-*/
+
+	    const { data } = result;
+
+	    if (!/code=(\d{3});/.test(data)) {
+	      // retry
+	      return await this.checkLoginStep();
+	    }
+
+	    const loginCode = parseInt(data.match(/code=(\d{3});/)[1], 10);
+
+	    switch (loginCode) {
+	      case 200:
+	        console.log('已点击确认登录!');
+	        this.redirectUri = data.match(/redirect_uri="(.+)";$/)[1] + '&fun=new';
+	        this.baseHost = url.parse(this.redirectUri).host;
+	        URLS = getUrls({ baseHost: this.baseHost });
+	        break;
+
+	      case 201:
+	        console.log('二维码已被扫描，请确认登录!');
+	        break;
+
+	      case 408:
+	        console.log('检查登录超时，正在重试...');
+	        break;
+
+	      default:
+	        console.log('未知的状态，重试...');
+	    }
+
+	    return loginCode;
+	  }
 	
+
 	async fetchTickets() {
     let result;
     try {
@@ -385,7 +442,8 @@ async fetchContact() {
     }
 
     const { data } = result;
-    console.log('fetchContact data = ' + data.toString());
+    console.log(result);
+    console.log(data);
 
     if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
       throw new Error('获取通讯录失败');
@@ -435,23 +493,32 @@ async fetchContact() {
   }
   	
   	async run() {
-		await this.fetchUUID();
-		console.log('uuid = ' + this.uuid);
+		// await this.fetchUUID();
+		// console.log('uuid = ' + this.uuid);
+		this.initConfig();
+	    try {
+	      this.uuid = await this.fetchUUID();
+	    } catch (e) {
+	      console.log('fetch uuid error', e);
+	      // this.init();
+	      return;
+	    }
     	this.showQRCODE();
     	console.log('请在手机端扫码绑定...');
 
     	// let login = await this.checkLoginStep();
+	    this.checkTimes = 0;
 	    while (true) {
-	    	const data = await this.checkLoginStep();
-		    const loginCode = parseInt(data.match(/code=(\d{3});/)[1], 10);
-		    console.log('loginCode = ' + loginCode);
-		    if (loginCode === 200) {
-		    	this.redirectUri = data.match(/redirect_uri="(.+)";$/)[1] + '&fun=new';
-		      	break;
-		    }
-		    if (loginCode !== 201) {
-		      	this.checkTimes += 1;
-		    }
+	      const loginCode = await this.checkLoginStep();
+	      if (loginCode === 200) break;
+
+	      if (loginCode !== 201) this.checkTimes += 1;
+
+	      if (this.checkTimes > 6) {
+	        console.log('检查登录状态次数超出限制，重新获取二维码');
+	        this.init();
+	        return;
+	      }
 	    }
 	    await this.fetchTickets();
 
@@ -474,10 +541,6 @@ async fetchContact() {
 	    this.pushHost = await this.lookupSyncCheckHost();
 
     	URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
-
-        
-
-        this.deviceid = makeDeviceID();
 
         console.log('this.skey = ' + this.skey);
         console.log('this.sid = ' + this.sid);
