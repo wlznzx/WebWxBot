@@ -4,6 +4,7 @@ const https = require('https');
 const EventEmitter = require('events');
 const qrcode = require('qrcode-terminal');
 const querystring = require("querystring");
+const axios = require('axios');
 const request_info = require("./request_info");
 
 const {
@@ -11,6 +12,25 @@ const {
 } = require('./conf');
 
 let URLS = getUrls({});
+
+
+const req = axios.create({
+  timeout: 35e3,
+  headers: request_info.headers,
+  // headers: {
+  //   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+  //   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) ' +
+  //     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2652.0 Safari/537.36',
+  //   'Referer': 'https://wx2.qq.com/',
+  // },
+  withCredentials: true,
+  xsrfCookieName: null,
+  xsrfHeaderName: null,
+  httpAgent: new http.Agent({ keepAlive: true }),
+  httpsAgent: new https.Agent({ keepAlive: true }),
+});
+
+const makeDeviceID = () => 'e' + Math.random().toFixed(15).toString().substring(2, 17);
 
 class wx{
 	initConfig() {
@@ -48,27 +68,22 @@ class wx{
   	}
   	// Step 1 获取UUID.
   	async fetchUUID() {
-	    var p = new Promise(function(resolve, reject){
+  			let p =  new Promise(function(resolve, reject){
 	        //做一些异步操作
-	        function _getUUID(argument) {
-				https.get('https://login.weixin.qq.com/jslogin?appid=wx782c26e4c19acffb&fun=new&lang=zh_CN', (res) => {
-				  // console.log('statusCode:', res.statusCode);
-				  // console.log('headers:', res.headers);
-				  res.on('data', (d) => {
-				  	// process.stdout.write(d);
-				  	var data = d.toString();
-				  	const uuid = data.match(/uuid = "(.+)";$/)[1];
-				  	// console.log('\n' + uuid);
+			https.get('https://login.weixin.qq.com/jslogin?appid=wx782c26e4c19acffb&fun=new&lang=zh_CN', (res) => {
+			res.on('data', (d) => {
+				var data = d.toString();
+				const uuid = data.match(/uuid = "(.+)";$/)[1];
 				  	resolve(uuid);
-				  });
-				}).on('error', (e) => {
-				  console.error(e);
 				});
-			}
-			_getUUID();
-	    });
-	    return p;
+			}).on('error', (e) => {
+				  console.error(e);
+			});
+	    	});
+	    
+	    this.uuid = await p;
   	}
+
   	// Step 2 显示二维码;
   	async showQRCODE(){
   		// 判断uuid是字符串;
@@ -111,154 +126,24 @@ class wx{
 			_login();
 	    });
 	    return p;
-	    /*
-	    while (true) {
-	    	const data = await p;
-		    const loginCode = parseInt(data.match(/code=(\d{3});/)[1], 10);
-		    console.log('loginCode = ' + loginCode);
-		    if (loginCode === 200) {
-		    	this.redirectUri = data.match(/redirect_uri="(.+)";$/)[1] + '&fun=new';
-		      	break;
-		    }
-		    if (loginCode !== 201) {
-		      	this.checkTimes += 1;
-		    }
-	    }
-	    */
   	}
-
-  	async fetchTickets() {
+/*
+	async fetchTickets() {
   		let url = this.redirectUri;
 	    let p = new Promise(function(resolve, reject){
-	        //做一些异步操作
-	        function _fetch_tickets(argument) {
-	        	const req = https.get(url, (res) => {
-				  res.on('data', (d) => {
-				    var data = d.toString();
+	        const req = https.get(url, (res) => {
+				res.on('data', (d) => {
+				var data = d.toString();
 				    resolve(data);
-				  });
 				});
-				req.on('error', (e) => {
-				  console.error(e);
-				});
-				req.end();
-			}
-			_fetch_tickets();
+			});
+			req.on('error', (e) => {
+				console.error(e);
+				reject(e);
+			});
+			req.end();
 	    });
-	    return p;
-	}
-
-
-	async webwxinit() {
-	    let result;
-
-	    let body = {
-	    	BaseRequest: this.baseRequest
-	    }
-
-	    let params = querystring.stringify({
-		    pass_ticket: this.passTicket,
-		    skey: this.skey
-		});
-
-		let options = {
-		    hostname: 'wx2.qq.com',
-		    port: 443,
-		    path: '/cgi-bin/mmwebwx-bin/webwxinit?' + params,
-		    method: 'POST',
-		    headers: request_info.headers
-		};
-
-		var json_body = JSON.stringify(body);
-
-  		console.log(params);
-  		/**/
-	    let p = new Promise(function(resolve, reject){
-	        //做一些异步操作
-	        function _webwxinit(argument) {
-	        	const req = https.request(options, (res) => {
-				  res.on('data', (d) => {
-				    var data = d.toString();
-				    console.log('_webxinit data = ' + data);
-				    resolve(data);
-				  });
-				});
-				req.on('error', (e) => {
-				  console.error(e);
-				});
-				req.end(json_body);
-			}
-			_webwxinit();
-	    });
-	    return p;
-	  }
-
-/*
-	async runLoop() {
-	    debug('正在初始化参数...');
-	    try {
-	      await this.webwxinit();
-	    } catch (e) {
-	      debug('登录信息已失效，正在重新获取二维码...');
-	      this.init();
-	      return;
-	    }
-
-	    debug('初始化成功!');
-
-	    try {
-	      debug('正在通知客户端网页端已登录...');
-	      await this.notifyMobile();
-
-	      debug('正在获取通讯录列表...');
-	      await this.fetchContact();
-	    } catch (e) {
-	      debug('初始化信息失败，正在重试');
-	      this.runLoop();
-	    }
-
-	    debug('通知成功!');
-	    debug('获取通讯录列表成功!');
-
-	    // await this.fetchBatchgetContact();
-	    this.pushHost = await this.lookupSyncCheckHost();
-
-	    URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
-
-	    this.syncCheck();
-
-	    // auto update Contacts every ten minute
-	    this.updataContactTimer = setInterval(() => {
-	      this.updateContact();
-	    }, 1000 * 60 * 10);
-	}
-*/
-  	
-  	async run() {
-		let uuid = await this.fetchUUID();
-		this.uuid = uuid;
-    	console.log('uuid = ' + uuid);
-    	this.showQRCODE();
-    	console.log('请在手机端扫码绑定.');
-    	let login = await this.checkLoginStep();
-    	// this.checkLoginStep();
-
-	    while (true) {
-	    	const data = await this.checkLoginStep();
-		    const loginCode = parseInt(data.match(/code=(\d{3});/)[1], 10);
-		    console.log('loginCode = ' + loginCode);
-		    if (loginCode === 200) {
-		    	this.redirectUri = data.match(/redirect_uri="(.+)";$/)[1] + '&fun=new';
-		      	break;
-		    }
-		    if (loginCode !== 201) {
-		      	this.checkTimes += 1;
-		    }
-	    }
-
-	    console.log('this.redirectUri == ' + this.redirectUri);
-
-	    let ticket_data = await this.fetchTickets();
+	    let ticket_data = await p;
 	    if(null != ticket_data){
 	    	const skeyM = ticket_data.match(/<skey>(.*)<\/skey>/);
 		    const wxsidM = ticket_data.match(/<wxsid>(.*)<\/wxsid>/);
@@ -277,15 +162,331 @@ class wx{
 		      DeviceID: this.deviceid,
 		    };
 	    }
+	}
+*/
+	
+	async fetchTickets() {
+    let result;
+    try {
+      result = await req.get(this.redirectUri);
+    } catch (e) {
+      console.log('fetch tickets network error', e);
+      // network error, retry
+      await this.fetchTickets();
+      return;
+    }
 
-	    const { init_data } = await this.webwxinit();
-	    if (!init_data || !init_data.BaseResponse || init_data.BaseResponse.Ret !== 0) {
-		    // throw new Error('Init Webwx failed');
-		}
-		this.my = data.User;
-		this.syncKey = data.SyncKey;
-		this.formateSyncKey = this.syncKey.List.map((item) => item.Key + '_' + item.Val).join('|');
-	    console.log('syncKey = ' + syncKey);
+    const { data } = result;
+
+    if (!/<ret>0<\/ret>/.test(data)) {
+      throw new Error('Get skey failed, restart login');
+    }
+
+    // const retM = data.match(/<ret>(.*)<\/ret>/);
+    // const scriptM = data.match(/<script>(.*)<\/script>/);
+    const skeyM = data.match(/<skey>(.*)<\/skey>/);
+    const wxsidM = data.match(/<wxsid>(.*)<\/wxsid>/);
+    const wxuinM = data.match(/<wxuin>(.*)<\/wxuin>/);
+    const passTicketM = data.match(/<pass_ticket>(.*)<\/pass_ticket>/);
+    // const redirectUrl = data.match(/<redirect_url>(.*)<\/redirect_url>/);
+
+    this.skey = skeyM && skeyM[1];
+    this.sid = wxsidM && wxsidM[1];
+    this.uin = wxuinM && wxuinM[1];
+    this.passTicket = passTicketM && passTicketM[1];
+    console.log(`
+      获得 skey -> ${this.skey}
+      获得 sid -> ${this.sid}
+      获得 uid -> ${this.uin}
+      获得 pass_ticket -> ${this.passTicket}
+    `);
+
+    this.baseRequest = {
+      Uin: parseInt(this.uin, 10),
+      Sid: this.sid,
+      Skey: this.skey,
+      DeviceID: this.deviceid,
+    };
+    /*
+    fs.writeFileSync(secretPath, JSON.stringify({
+      skey: this.skey,
+      sid: this.sid,
+      uin: this.uin,
+      passTicket: this.passTicket,
+      baseHost: this.baseHost,
+      baseRequest: this.baseRequest,
+    }), 'utf8');
+*/
+  }
+
+	async webwxinit() {
+    let result;
+    try {
+      result = await req.post(
+        URLS.API_webwxinit,
+        { BaseRequest: this.baseRequest },
+        {
+          params: {
+            pass_ticket: this.passTicket,
+            skey: this.skey,
+          },
+        }
+      );
+    } catch (e) {
+      debug('webwxinit network error', e);
+      // network error retry
+      await this.webwxinit();
+      return;
+    }
+
+    const { data } = result;
+
+    if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
+      throw new Error('Init Webwx failed');
+    }
+
+    this.my = data.User;
+    this.syncKey = data.SyncKey;
+    this.formateSyncKey = this.syncKey.List.map((item) => item.Key + '_' + item.Val).join('|');
+  }
+
+  async notifyMobile() {
+    let result;
+    try {
+      result = await req.post(
+        URLS.API_webwxstatusnotify,
+        {
+          BaseRequest: this.baseRequest,
+          Code: CODES.StatusNotifyCode_INITED,
+          FromUserName: this.my.UserName,
+          ToUserName: this.my.UserName,
+          ClientMsgId: +new Date,
+        },
+        {
+          params: {
+            lang: 'zh_CN',
+            pass_ticket: this.passTicket,
+          },
+        }
+      );
+    } catch (e) {
+      console.log('notify mobile network error', e);
+      // network error retry
+      await this.notifyMobile();
+      return;
+    }
+
+    const { data } = result;
+
+    if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
+      throw new Error('通知客户端失败');
+    }
+  }
+
+	async lookupSyncCheckHost() {
+    for (let host of PUSH_HOST_LIST) {
+      let result;
+      try {
+        result = await req.get('https://' + host + '/cgi-bin/mmwebwx-bin/synccheck', {
+          params: {
+            r: +new Date,
+            skey: this.skey,
+            sid: this.sid,
+            uin: this.uin,
+            deviceid: this.deviceid,
+            synckey: this.formateSyncKey,
+            _: +new Date,
+          },
+        });
+      } catch (e) {
+        console.log('lookupSyncCheckHost network error', host);
+        // network error retry
+        break;
+      }
+
+      const { data } = result;
+
+      const retcode = data.match(/retcode:"(\d+)"/)[1];
+      if (retcode === '0') return host;
+    }
+  }
+
+
+	async syncCheck() {
+    let result;
+    try {
+      result = await req.get(
+        URLS.API_synccheck,
+        {
+          params: {
+            r: +new Date(),
+            skey: this.skey,
+            sid: this.sid,
+            uin: this.uin,
+            deviceid: this.deviceid,
+            synckey: this.syncKey,
+            _: +new Date(),
+          },
+        }
+      );
+    } catch (e) {
+      debug('synccheck network error', e);
+      // network error retry
+      return await this.syncCheck();
+    }
+
+    const { data } = result;
+
+    console.log('check data = ' + data);
+
+    const retcode = data.match(/retcode:"(\d+)"/)[1];
+    const selector = data.match(/selector:"(\d+)"/)[1];
+
+
+
+    console.log('retcode = ' + retcode);
+    if (retcode !== '0') {
+      // this.runLoop();
+      return;
+    }
+
+    if (selector !== '0') {
+      // this.webwxsync();
+    }
+
+    clearTimeout(this.checkSyncTimer);
+    this.checkSyncTimer = setTimeout(() => {
+      this.syncCheck();
+    }, 3e3);
+  }
+
+async fetchContact() {
+    let result;
+    console.log('URLS.API_webwxgetcontact = ' + URLS.API_webwxgetcontact);
+        console.log('this.passTicket = ' + this.passTicket);
+        console.log('this.skey = ' + this.skey);
+    try {
+      result = await req.post(
+        URLS.API_webwxgetcontact,
+        {},
+        {
+          params: {
+            pass_ticket: this.passTicket,
+            skey: this.skey,
+            r: +new Date,
+          },
+        }
+      );
+    } catch (e) {
+      console.log('fetch contact network error', e);
+      // network error retry
+      await this.fetchContact();
+      return;
+    }
+
+    const { data } = result;
+    console.log('fetchContact data = ' + data.toString());
+
+    if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
+      throw new Error('获取通讯录失败');
+    }
+
+    // this.Members.insert(data.MemberList);
+    // this.totalMemberCount = data.MemberList.length;
+    // this.brandCount = 0;
+    // this.spCount = 0;
+    // this.groupCount = 0;
+    // this.friendCount = 0;
+    // data.MemberList.forEach((member) => {
+    //   const userName = member.UserName;
+
+    //   if (member.VerifyFlag & CODES.MM_USERATTRVERIFYFALG_BIZ_BRAND) {
+    //     this.brandCount += 1;
+    //     this.Brands.insert(member);
+    //     return;
+    //   }
+
+    //   if (SP_ACCOUNTS.includes(userName) || /@qqim$/.test(userName)) {
+    //     this.spCount += 1;
+    //     this.SPs.insert(member);
+    //     return;
+    //   }
+
+    //   if (userName.includes('@@')) {
+    //     this.groupCount += 1;
+    //     this.Groups.insert(member);
+    //     return;
+    //   }
+
+    //   if (userName !== this.my.UserName) {
+    //     this.friendCount += 1;
+    //     this.Contacts.insert(member);
+    //   }
+    // });
+
+    console.log(`
+      获取通讯录成功
+      全部成员数: ${this.totalMemberCount}
+      公众帐号数: ${this.brandCount}
+      特殊帐号数: ${this.spCount}
+      通讯录好友数: ${this.friendCount}
+      加入的群聊数(不准确，只有把群聊加入通讯录才会在这里显示): ${this.groupCount}
+    `);
+  }
+  	
+  	async run() {
+		await this.fetchUUID();
+		console.log('uuid = ' + this.uuid);
+    	this.showQRCODE();
+    	console.log('请在手机端扫码绑定...');
+
+    	// let login = await this.checkLoginStep();
+	    while (true) {
+	    	const data = await this.checkLoginStep();
+		    const loginCode = parseInt(data.match(/code=(\d{3});/)[1], 10);
+		    console.log('loginCode = ' + loginCode);
+		    if (loginCode === 200) {
+		    	this.redirectUri = data.match(/redirect_uri="(.+)";$/)[1] + '&fun=new';
+		      	break;
+		    }
+		    if (loginCode !== 201) {
+		      	this.checkTimes += 1;
+		    }
+	    }
+	    await this.fetchTickets();
+
+	    await this.webwxinit();
+
+
+	    console.log('初始化成功!');
+
+	    // try {
+	      console.log('正在通知客户端网页端已登录...');
+	      await this.notifyMobile();
+
+	      console.log('正在获取通讯录列表...');
+	      await this.fetchContact();
+	    // } catch (e) {
+	    //   console.log('初始化信息失败，正在重试');
+	    // }
+	    
+
+	    this.pushHost = await this.lookupSyncCheckHost();
+
+    	URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
+
+        
+
+        this.deviceid = makeDeviceID();
+
+        console.log('this.skey = ' + this.skey);
+        console.log('this.sid = ' + this.sid);
+        console.log('this.uin = ' + this.uin);
+        console.log('this.deviceid = ' + this.deviceid);
+        console.log('this.formateSyncKey = ' + this.formateSyncKey);
+
+
+    	this.syncCheck();
   	}
 }
 /*
