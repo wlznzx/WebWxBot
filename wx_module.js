@@ -14,6 +14,7 @@ const tough = require('tough-cookie');
 const EventEmitter = require('events');
 const Datastore = require('nedb');
 const Promise = require('bluebird');
+const WxDao = require('./wx_dao');
 
 const {
   getUrls, CODES, SP_ACCOUNTS, PUSH_HOST_LIST,
@@ -43,6 +44,14 @@ Promise.promisifyAll(Datastore.prototype);
 const makeDeviceID = () => 'e' + Math.random().toFixed(15).toString().substring(2, 17);
 
 class WxModule extends EventEmitter{
+
+
+  constructor(options = {}) {
+    super();
+    this.mWxDao = new WxDao();
+    this.mWxDao.initDB();
+  }
+
 	initConfig() {
 	    this.baseHost = '';
 	    this.pushHost = '';
@@ -59,19 +68,19 @@ class WxModule extends EventEmitter{
 	    this.deviceid = makeDeviceID();
 
 	    // member store
-	    this.Members = new Datastore();
-	    this.Contacts = new Datastore();
-	    this.Groups = new Datastore();
-	    this.GroupMembers = new Datastore();
-	    this.Brands = new Datastore(); // 公众帐号
-	    this.SPs = new Datastore(); // 特殊帐号
+	    // this.Members = new Datastore();
+	    // this.Contacts = new Datastore();
+	    // this.Groups = new Datastore();
+	    // this.GroupMembers = new Datastore();
+	    // this.Brands = new Datastore(); // 公众帐号
+	    // this.SPs = new Datastore(); // 特殊帐号
 
 	    // indexing
-	    this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
-	    this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
 
 	    clearTimeout(this.checkSyncTimer);
 	    clearInterval(this.updataContactTimer);
@@ -443,46 +452,46 @@ class WxModule extends EventEmitter{
         throw new Error('获取通讯录失败');
       }
 
-      this.Members.insert(data.MemberList);
-      this.totalMemberCount = data.MemberList.length;
-      this.brandCount = 0;
-      this.spCount = 0;
-      this.groupCount = 0;
-      this.friendCount = 0;
+      this.mWxDao.Members.insert(data.MemberList);
+      this.mWxDao.totalMemberCount = data.MemberList.length;
+      this.mWxDao.brandCount = 0;
+      this.mWxDao.spCount = 0;
+      this.mWxDao.groupCount = 0;
+      this.mWxDao.friendCount = 0;
       data.MemberList.forEach((member) => {
         const userName = member.UserName;
 
         if (member.VerifyFlag & CODES.MM_USERATTRVERIFYFALG_BIZ_BRAND) {
-          this.brandCount += 1;
-          this.Brands.insert(member);
+          this.mWxDao.brandCount += 1;
+          this.mWxDao.Brands.insert(member);
           return;
         }
 
         if (SP_ACCOUNTS.includes(userName) || /@qqim$/.test(userName)) {
-          this.spCount += 1;
-          this.SPs.insert(member);
+          this.mWxDao.spCount += 1;
+          this.mWxDao.SPs.insert(member);
           return;
         }
 
         if (userName.includes('@@')) {
-          this.groupCount += 1;
-          this.Groups.insert(member);
+          this.mWxDao.groupCount += 1;
+          this.mWxDao.Groups.insert(member);
           return;
         }
 
         if (userName !== this.my.UserName) {
-          this.friendCount += 1;
-          this.Contacts.insert(member);
+          this.mWxDao.friendCount += 1;
+          this.mWxDao.Contacts.insert(member);
         }
       });
 
       console.log(`
         获取通讯录成功
-        全部成员数: ${this.totalMemberCount}
-        公众帐号数: ${this.brandCount}
-        特殊帐号数: ${this.spCount}
-        通讯录好友数: ${this.friendCount}
-        加入的群聊数(不准确，只有把群聊加入通讯录才会在这里显示): ${this.groupCount}
+        全部成员数: ${this.mWxDao.totalMemberCount}
+        公众帐号数: ${this.mWxDao.brandCount}
+        特殊帐号数: ${this.mWxDao.spCount}
+        通讯录好友数: ${this.mWxDao.friendCount}
+        加入的群聊数(不准确，只有把群聊加入通讯录才会在这里显示): ${this.mWxDao.groupCount}
       `);
     }
 
@@ -536,6 +545,7 @@ class WxModule extends EventEmitter{
         return;
       }
 
+      console.log("msg.FromUserName = " + msg.FromUserName);
       msg.Member = await this.getMember(msg.FromUserName);
       if (!msg.Member) return;
       console.log(`
@@ -546,18 +556,69 @@ class WxModule extends EventEmitter{
       this.emit('friend', msg);
     }
 
+    async fetchBatchgetContact(groupIds) {
+      const list = groupIds.map((id) => ({ UserName: id, EncryChatRoomId: '' }));
+      let result;
+      try {
+        result = await req.post(
+          URLS.API_webwxbatchgetcontact,
+          {
+            BaseRequest: this.baseRequest,
+            Count: list.length,
+            List: list,
+          },
+          {
+            params: {
+              type: 'ex',
+              r: +new Date,
+            },
+          }
+        );
+      } catch (e) {
+        console.log('fetch batchgetcontact network error', e);
+        // network error retry
+        await this.fetchBatchgetContact(groupIds);
+        return;
+      }
+
+      const { data } = result;
+
+      if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
+        throw new Error('Fetch batchgetcontact fail');
+      }
+
+      data.ContactList.forEach((Group) => {
+        this.Groups.insert(Group);
+        console.log(`获取到群: ${Group.NickName}`);
+        console.log(`群 ${Group.NickName} 成员数量: ${Group.MemberList.length}`);
+
+        const { MemberList } = Group;
+        MemberList.forEach((member) => {
+          // this.GroupMembers.update({
+        //   UserName: member.UserName,
+        //   GroupUserName: member.GroupUserName,
+        // }, member, { upsert: true });
+            this.mWxDao.updateGroupMembers({
+            UserName: member.UserName,
+            GroupUserName: member.GroupUserName,
+          }, member, { upsert: true });
+        });
+      });
+    }
+
     /*
       
     */
     async getMember(id) {
       // GetMambers From DB.
-      const member = await this.Members.findOneAsync({ UserName: id });
+      const member = await this.mWxDao.getMember(id);
+      // const member = await this.Members.findOneAsync({ UserName: id });
       return member;
     }
 
     async getGroup(groupId) {
       // GetGroup From DB.
-      let group = await this.Groups.findOneAsync({ UserName: groupId });
+      let group = await this.mWxDao.getGroup(groupId);
       if (group) return group;
       try {
         await this.fetchBatchgetContact([groupId]);
@@ -565,15 +626,12 @@ class WxModule extends EventEmitter{
         console.log('fetchBatchgetContact error', e);
         return null;
       }
-      group = await this.Groups.findOneAsync({ UserName: groupId });
+      group = this.mWxDao.getGroup(groupId);
       return group;
     }
 
     async getGroupMember(id, groupId) {
-      let member = await this.GroupMembers.findOneAsync({
-        UserName: id,
-        GroupUserName: groupId,
-      });
+      let member = await this.getGroupMember(id, groupId);
       if (member) return member;
       try {
         await this.fetchBatchgetContact([groupId]);
@@ -581,7 +639,7 @@ class WxModule extends EventEmitter{
         console.log('fetchBatchgetContact error', e);
         return null;
       }
-      member = await this.GroupMembers.findOneAsync({ UserName: id });
+      member = await this.getGroupMember(id);
       return member;
     }
 
