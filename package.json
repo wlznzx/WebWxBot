@@ -5,8 +5,11 @@
   "main": "weixin.js",
   "dependencies": {
     "axios": "^0.18.0",
+    "bluebird": "^3.5.1",
+    "nedb": "^1.8.0",
     "node-axios-cookiejar": "0.0.3",
     "qrcode-terminal": "^0.12.0",
+    "touch": "^3.1.0",
     "tough-cookie": "^2.4.2",
     "tough-cookie-filestore": "0.0.1"
   },

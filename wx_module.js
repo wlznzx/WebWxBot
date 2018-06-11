@@ -12,6 +12,8 @@ const axiosCookieJarSupport = require('node-axios-cookiejar');
 const touch = require('touch');
 const tough = require('tough-cookie');
 const EventEmitter = require('events');
+const Datastore = require('nedb');
+const Promise = require('bluebird');
 
 const {
   getUrls, CODES, SP_ACCOUNTS, PUSH_HOST_LIST,
@@ -36,6 +38,7 @@ const req = axios.create({
 });
 
 axiosCookieJarSupport(req);
+Promise.promisifyAll(Datastore.prototype);
 
 const makeDeviceID = () => 'e' + Math.random().toFixed(15).toString().substring(2, 17);
 
@@ -56,19 +59,19 @@ class WxModule extends EventEmitter{
 	    this.deviceid = makeDeviceID();
 
 	    // member store
-	    // this.Members = new Datastore();
-	    // this.Contacts = new Datastore();
-	    // this.Groups = new Datastore();
-	    // this.GroupMembers = new Datastore();
-	    // this.Brands = new Datastore(); // 公众帐号
-	    // this.SPs = new Datastore(); // 特殊帐号
+	    this.Members = new Datastore();
+	    this.Contacts = new Datastore();
+	    this.Groups = new Datastore();
+	    this.GroupMembers = new Datastore();
+	    this.Brands = new Datastore(); // 公众帐号
+	    this.SPs = new Datastore(); // 特殊帐号
 
-	    // // indexing
-	    // this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
+	    // indexing
+	    this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
+	    this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
+	    this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
+	    this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
+	    this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
 
 	    clearTimeout(this.checkSyncTimer);
 	    clearInterval(this.updataContactTimer);
@@ -440,38 +443,38 @@ class WxModule extends EventEmitter{
         throw new Error('获取通讯录失败');
       }
 
-      // this.Members.insert(data.MemberList);
-      // this.totalMemberCount = data.MemberList.length;
-      // this.brandCount = 0;
-      // this.spCount = 0;
-      // this.groupCount = 0;
-      // this.friendCount = 0;
-      // data.MemberList.forEach((member) => {
-      //   const userName = member.UserName;
+      this.Members.insert(data.MemberList);
+      this.totalMemberCount = data.MemberList.length;
+      this.brandCount = 0;
+      this.spCount = 0;
+      this.groupCount = 0;
+      this.friendCount = 0;
+      data.MemberList.forEach((member) => {
+        const userName = member.UserName;
 
-      //   if (member.VerifyFlag & CODES.MM_USERATTRVERIFYFALG_BIZ_BRAND) {
-      //     this.brandCount += 1;
-      //     this.Brands.insert(member);
-      //     return;
-      //   }
+        if (member.VerifyFlag & CODES.MM_USERATTRVERIFYFALG_BIZ_BRAND) {
+          this.brandCount += 1;
+          this.Brands.insert(member);
+          return;
+        }
 
-      //   if (SP_ACCOUNTS.includes(userName) || /@qqim$/.test(userName)) {
-      //     this.spCount += 1;
-      //     this.SPs.insert(member);
-      //     return;
-      //   }
+        if (SP_ACCOUNTS.includes(userName) || /@qqim$/.test(userName)) {
+          this.spCount += 1;
+          this.SPs.insert(member);
+          return;
+        }
 
-      //   if (userName.includes('@@')) {
-      //     this.groupCount += 1;
-      //     this.Groups.insert(member);
-      //     return;
-      //   }
+        if (userName.includes('@@')) {
+          this.groupCount += 1;
+          this.Groups.insert(member);
+          return;
+        }
 
-      //   if (userName !== this.my.UserName) {
-      //     this.friendCount += 1;
-      //     this.Contacts.insert(member);
-      //   }
-      // });
+        if (userName !== this.my.UserName) {
+          this.friendCount += 1;
+          this.Contacts.insert(member);
+        }
+      });
 
       console.log(`
         获取通讯录成功
@@ -542,6 +545,46 @@ class WxModule extends EventEmitter{
 
       this.emit('friend', msg);
     }
+
+    /*
+      
+    */
+    async getMember(id) {
+      // GetMambers From DB.
+      const member = await this.Members.findOneAsync({ UserName: id });
+      return member;
+    }
+
+    async getGroup(groupId) {
+      // GetGroup From DB.
+      let group = await this.Groups.findOneAsync({ UserName: groupId });
+      if (group) return group;
+      try {
+        await this.fetchBatchgetContact([groupId]);
+      } catch (e) {
+        console.log('fetchBatchgetContact error', e);
+        return null;
+      }
+      group = await this.Groups.findOneAsync({ UserName: groupId });
+      return group;
+    }
+
+    async getGroupMember(id, groupId) {
+      let member = await this.GroupMembers.findOneAsync({
+        UserName: id,
+        GroupUserName: groupId,
+      });
+      if (member) return member;
+      try {
+        await this.fetchBatchgetContact([groupId]);
+      } catch (e) {
+        console.log('fetchBatchgetContact error', e);
+        return null;
+      }
+      member = await this.GroupMembers.findOneAsync({ UserName: id });
+      return member;
+    }
+
   	
   	async run() {
 		this.initConfig();

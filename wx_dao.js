@@ -25,12 +25,11 @@ class WxDao{
 	}
 
 	async getMember(id) {
-    const member = await this.Members.findOneAsync({ UserName: id });
+    	const member = await this.Members.findOneAsync({ UserName: id });
+    	return member;
+  	}
 
-    return member;
-  }
-
-  async getGroup(groupId) {
+  	async getGroup(groupId) {
     let group = await this.Groups.findOneAsync({ UserName: groupId });
 
     if (group) return group;
@@ -45,26 +44,26 @@ class WxDao{
     group = await this.Groups.findOneAsync({ UserName: groupId });
 
     return group;
-  }
+	}
 
-  async getGroupMember(id, groupId) {
-    let member = await this.GroupMembers.findOneAsync({
-      UserName: id,
-      GroupUserName: groupId,
-    });
+	async getGroupMember(id, groupId) {
+	    let member = await this.GroupMembers.findOneAsync({
+	      UserName: id,
+	      GroupUserName: groupId,
+	});
 
-    if (member) return member;
+	    if (member) return member;
 
-    try {
-      await this.fetchBatchgetContact([groupId]);
-    } catch (e) {
-      console.log('fetchBatchgetContact error', e);
-      return null;
-    }
+	    try {
+	      await this.fetchBatchgetContact([groupId]);
+	    } catch (e) {
+	      console.log('fetchBatchgetContact error', e);
+	      return null;
+	    }
 
-    member = await this.GroupMembers.findOneAsync({ UserName: id });
+	    member = await this.GroupMembers.findOneAsync({ UserName: id });
 
-    return member;
-  }
-	
+	    return member;
+	  }
+
 }
