@@ -1,7 +1,6 @@
 const fs = require('fs');
 const http = require('http');
 const https = require('https');
-const EventEmitter = require('events');
 const qrcode = require('qrcode-terminal');
 const querystring = require("querystring");
 const axios = require('axios');
@@ -12,6 +11,7 @@ const FileCookieStore = require('tough-cookie-filestore');
 const axiosCookieJarSupport = require('node-axios-cookiejar');
 const touch = require('touch');
 const tough = require('tough-cookie');
+const EventEmitter = require('events');
 
 const {
   getUrls, CODES, SP_ACCOUNTS, PUSH_HOST_LIST,
@@ -27,12 +27,6 @@ const jar = new tough.CookieJar(new FileCookieStore(cookiePath));
 const req = axios.create({
   timeout: 35e3,
   headers: request_info.headers,
-  // headers: {
-  //   'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-  //   'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_2) ' +
-  //     'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/50.0.2652.0 Safari/537.36',
-  //   'Referer': 'https://wx2.qq.com/',
-  // },
   jar,
   withCredentials: true,
   xsrfCookieName: null,
