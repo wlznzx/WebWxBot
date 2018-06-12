@@ -5,10 +5,11 @@ class WxDao{
 
 	initDB(){
 		// member store
-	    this.Members = new Datastore('./member.db');
-	    this.Contacts = new Datastore();
-	    this.Groups = new Datastore();
-	    this.GroupMembers = new Datastore();
+	    this.Members = new Datastore(); // 所有成员
+	    this.Contacts = new Datastore(); // 联系人
+	    this.Groups = new Datastore();	// 讨论组信息
+	    // this.GroupMembers = new Datastore({filename:'E:/NodeJSCode/db/groups_bot.db',autoload: true });
+	    this.GroupMembers = new Datastore(); // 讨论组成员信息
 	    this.Brands = new Datastore(); // 公众帐号
 	    this.SPs = new Datastore(); // 特殊帐号
 	    // indexing
@@ -32,23 +33,7 @@ class WxDao{
 
   	async getGroup(groupId) {
     let group = await this.Groups.findOneAsync({ UserName: groupId });
-
     if (group) return group;
-
-    // try {
-    //   await this.fetchBatchgetContact([groupId]);
-    // } catch (e) {
-    //   console.log('fetchBatchgetContact error', e);
-    //   return null;
-    // }
-
-    // group = await this.Groups.findOneAsync({ UserName: groupId });
-
-    // return group;
-	}
-
-	async updateGroupMembers(argument){
-		this.GroupMembers.update(argument);
 	}
 
 	async getGroupMember(id, groupId) {
@@ -58,6 +43,12 @@ class WxDao{
 		});
 		if (member) return member;
 	}
+
+	async updateGroupMembers(argument){
+		this.GroupMembers.update(argument);
+	}
+
+	
 }
 
 module.exports = WxDao;

@@ -393,21 +393,14 @@ class WxModule extends EventEmitter{
           }
         );
       } catch (e) {
-        debug('synccheck network error', e);
+        console.log('synccheck network error', e);
         // network error retry
         return await this.syncCheck();
       }
 
       const { data } = result;
-
-      console.log('check data = ' + data);
-
       const retcode = data.match(/retcode:"(\d+)"/)[1];
-      const selector = data.match(/selector:"(\d+)"/)[1];
-
-
-
-      console.log('retcode = ' + retcode);
+      const selector = data.match(/selector:"(\d+)"/)[1];;
       if (retcode !== '0') {
         // this.runLoop();
         return;
@@ -521,9 +514,6 @@ class WxModule extends EventEmitter{
 
       const { data } = result;
 
-      console.log("webwxsync data\n");
-      // console.log(data);
-
       this.syncKey = data.SyncKey;
       this.formateSyncKey = this.syncKey.List.map((item) => item.Key + '_' + item.Val).join('|');
       data.AddMsgList.forEach((msg) => this.handleMsg(msg));
@@ -531,11 +521,14 @@ class WxModule extends EventEmitter{
 
     async handleMsg(msg) {
       if (msg.FromUserName.includes('@@')) {
+
+        console.log('msg\n');
+        console.log(msg);
+
         const userId = msg.Content.match(/^(@[a-zA-Z0-9]+|[a-zA-Z0-9_-]+):<br\/>/)[1];
         msg.GroupMember = await this.getGroupMember(userId, msg.FromUserName);
         msg.Group = await this.getGroup(msg.FromUserName);
         msg.Content = msg.Content.replace(/^(@[a-zA-Z0-9]+|[a-zA-Z0-9_-]+):<br\/>/, '');
-
         console.log(`
           来自群 ${msg.Group.NickName} 的消息
           ${msg.GroupMember.DisplayName || msg.GroupMember.NickName}: ${msg.Content}
@@ -583,25 +576,31 @@ class WxModule extends EventEmitter{
 
       const { data } = result;
 
+      console.log('fetchBatchgetContact groupIds = ' + groupIds);
+      console.log(result);
+
       if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
         throw new Error('Fetch batchgetcontact fail');
       }
 
+      console.log('data\n');
+      console.log(data);
+
       data.ContactList.forEach((Group) => {
-        this.Groups.insert(Group);
+        this.mWxDao.Groups.insert(Group);
         console.log(`获取到群: ${Group.NickName}`);
         console.log(`群 ${Group.NickName} 成员数量: ${Group.MemberList.length}`);
 
         const { MemberList } = Group;
         MemberList.forEach((member) => {
-          // this.GroupMembers.update({
-        //   UserName: member.UserName,
-        //   GroupUserName: member.GroupUserName,
-        // }, member, { upsert: true });
-            this.mWxDao.updateGroupMembers({
-            UserName: member.UserName,
-            GroupUserName: member.GroupUserName,
-          }, member, { upsert: true });
+        this.mWxDao.GroupMembers.update({
+          UserName: member.UserName,
+          GroupUserName: member.GroupUserName,
+        }, member, { upsert: true });
+          //   this.mWxDao.updateGroupMembers({
+          //   UserName: member.UserName,
+          //   GroupUserName: member.GroupUserName,
+          // }, member, { upsert: true });
         });
       });
     }
@@ -631,15 +630,23 @@ class WxModule extends EventEmitter{
     }
 
     async getGroupMember(id, groupId) {
-      let member = await this.getGroupMember(id, groupId);
+      console.log('getGroupMember step1');
+      let member = await this.mWxDao.GroupMembers.findOneAsync({
+        UserName: id,
+        GroupUserName: groupId,
+      });
       if (member) return member;
+      console.log('getGroupMember step2');
       try {
         await this.fetchBatchgetContact([groupId]);
       } catch (e) {
         console.log('fetchBatchgetContact error', e);
         return null;
       }
-      member = await this.getGroupMember(id);
+      console.log('getGroupMember step3');
+      member = await this.mWxDao.GroupMembers.findOneAsync({ UserName: id });
+      console.log('getGroupMember step4 member');
+      console.log(member);
       return member;
     }
 
