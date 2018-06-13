@@ -1,14 +1,27 @@
 const WxModule = require("./wx_module");
-
+const readline = require('readline');
 
 let mWxModule = new WxModule();
 
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+rl.question('What do you think of Node.js? ', (answer) => {
+  // TODO: Log the answer in a database
+  console.log(`Thank you for your valuable feedback: ${answer}`);
+  rl.close();
+});
+
+
 mWxModule.on('friend', (msg) => {
-  console.log(`
+	if(msg.Content && msg.Content != ''){
+		console.log(`
         新消息
         ${msg.Member.RemarkName || msg.Member.NickName}: ${msg.Content}
       `);
-  // bot.sendText(msg.FromUserName, 'Got it');
+	}
 });
 
 mWxModule.on('group', (msg) => {
@@ -19,5 +32,5 @@ mWxModule.on('group', (msg) => {
   // bot.sendText(msg.FromUserName, 'Got it');
 });
 
-mWxModule.run();
+mWxModule.doRun();
 

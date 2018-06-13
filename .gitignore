@@ -1,3 +1,4 @@
 npm-debug.log
 .cookie.json
 *.db
+.secret.json

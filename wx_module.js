@@ -24,6 +24,7 @@ let URLS = getUrls({});
 
 
 const cookiePath = path.join(process.cwd(), '.cookie.json');
+const secretPath = path.join(process.cwd(), '.secret.json');
 touch.sync(cookiePath);
 const jar = new tough.CookieJar(new FileCookieStore(cookiePath));
 
@@ -256,7 +257,7 @@ class WxModule extends EventEmitter{
       Skey: this.skey,
       DeviceID: this.deviceid,
     };
-      /*
+
       fs.writeFileSync(secretPath, JSON.stringify({
         skey: this.skey,
         sid: this.sid,
@@ -265,7 +266,6 @@ class WxModule extends EventEmitter{
         baseHost: this.baseHost,
         baseRequest: this.baseRequest,
       }), 'utf8');
-  */
     }
 
   	async webwxinit() {
@@ -505,10 +505,6 @@ class WxModule extends EventEmitter{
 
     async handleMsg(msg) {
       if (msg.FromUserName.includes('@@')) {
-
-        // console.log('msg\n');
-        // console.log(msg);
-
         const userId = msg.Content.match(/^(@[a-zA-Z0-9]+|[a-zA-Z0-9_-]+):<br\/>/)[1];
         msg.GroupMember = await this.getGroupMember(userId, msg.FromUserName);
         msg.Group = await this.getGroup(msg.FromUserName);
@@ -528,7 +524,8 @@ class WxModule extends EventEmitter{
       //   新消息
       //   ${msg.Member.RemarkName || msg.Member.NickName}: ${msg.Content}
       // `);
-
+      // console.log('msg\n');
+      // console.log(msg);
       this.emit('friend', msg);
     }
 
@@ -571,9 +568,8 @@ class WxModule extends EventEmitter{
 
       data.ContactList.forEach((Group) => {
         this.mWxDao.Groups.insert(Group);
-        console.log(`获取到群: ${Group.NickName}`);
-        console.log(`群 ${Group.NickName} 成员数量: ${Group.MemberList.length}`);
-
+        // console.log(`获取到群: ${Group.NickName}`);
+        // console.log(`群 ${Group.NickName} 成员数量: ${Group.MemberList.length}`);
         const { MemberList } = Group;
         MemberList.forEach((member) => {
             this.mWxDao.updateGroupMembers({
@@ -605,70 +601,179 @@ class WxModule extends EventEmitter{
     }
 
     async getGroupMember(id, groupId) {
-      // console.log('getGroupMember step1');
       let member = await this.mWxDao.getGroupMember(id);
       if (member) return member;
-      // console.log('getGroupMember step2');
       try {
         await this.fetchBatchgetContact([groupId]);
       } catch (e) {
         console.log('fetchBatchgetContact error', e);
         return null;
       } 
-      // console.log('getGroupMember step3');
       member = await this.mWxDao.getGroupMember(id);
-      // console.log('getGroupMember step4 member');
-      console.log(member);
       return member;
     }
 
-  	
+  	/*
   	async run() {
-		this.initConfig();
-	    try {
-	      this.uuid = await this.fetchUUID();
-	    } catch (e) {
-	      console.log('fetch uuid error', e);
-	      // this.init();
-	      return;
-	    }
-    	this.showQRCODE();
-    	console.log('请在手机端扫码绑定...');
+  		this.initConfig();
+  	    try {
+  	      this.uuid = await this.fetchUUID();
+  	    } catch (e) {
+  	      console.log('fetch uuid error', e);
+  	      // this.init();
+  	      return;
+  	    }
+      	this.showQRCODE();
+      	console.log('请在手机端扫码绑定...');
 
-    	// let login = await this.checkLoginStep();
-	    this.checkTimes = 0;
-	    while (true) {
-	      const loginCode = await this.checkLoginStep();
-	      if (loginCode === 200) break;
+      	// let login = await this.checkLoginStep();
+  	    this.checkTimes = 0;
+  	    while (true) {
+  	      const loginCode = await this.checkLoginStep();
+  	      if (loginCode === 200) break;
 
-	      if (loginCode !== 201) this.checkTimes += 1;
+  	      if (loginCode !== 201) this.checkTimes += 1;
 
-	      if (this.checkTimes > 6) {
-	        console.log('检查登录状态次数超出限制，重新获取二维码');
-	        this.init();
-	        return;
-	      }
-	    }
-	    await this.fetchTickets();
+  	      if (this.checkTimes > 6) {
+  	        console.log('检查登录状态次数超出限制，重新获取二维码');
+  	        this.init();
+  	        return;
+  	      }
+  	    }
+  	    await this.fetchTickets();
 
-	    await this.webwxinit();
+  	    await this.webwxinit();
 
+  	    console.log('初始化成功!');
 
-	    console.log('初始化成功!');
+  	    try {
+  	      console.log('正在通知客户端网页端已登录...');
+  	      await this.notifyMobile();
+  	      console.log('正在获取通讯录列表...');
+  	      await this.fetchContact();
+  	    } catch (e) {
 
-	    try {
-	      console.log('正在通知客户端网页端已登录...');
-	      await this.notifyMobile();
-	      console.log('正在获取通讯录列表...');
-	      await this.fetchContact();
-	    } catch (e) {
-
-	    }
-	    
-	    this.pushHost = await this.lookupSyncCheckHost();
-    	URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
-    	this.syncCheck();
+  	    }
+  	    
+  	    this.pushHost = await this.lookupSyncCheckHost();
+      	URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
+      	this.syncCheck();
+        this.loop();
   	}
+    */
+
+    async doRun(){
+      if(fs.existsSync(secretPath)) {
+        this.initConfig();
+        const secret = JSON.parse(fs.readFileSync(secretPath, 'utf8'));
+        Object.assign(this, secret);
+        this.loop();
+      } else {
+        this.init();
+      }
+    }
+
+    async init() {
+      this.initConfig();
+      try {
+        this.uuid = await this.fetchUUID();
+      } catch (e) {
+        console.log('fetchUUID Error', e);
+        this.init();
+        return;
+      }
+
+      if (!this.uuid) {
+        console.log('获取 uuid 失败，正在重试...');
+        this.init();
+        return;
+      }
+
+      this.showQRCODE();
+      console.log('请在手机端扫码绑定...');
+
+      // const qrcodeUrl = URLS.QRCODE_PATH + this.uuid;
+      // this.emit('qrcode', qrcodeUrl);
+
+      // if (this.receiver) {
+      //   console.log(`发送二维码图片到邮箱 ${this.receiver}`);
+      //   this.transporter.sendMail({
+      //     from: `WeixinBot <${this.transporter.transporter.options.auth.user}>`,
+      //     to: this.receiver,
+      //     subject: 'WeixinBot 请求登录',
+      //     html: `<img src="${qrcodeUrl}" height="256" width="256" />`,
+      //   }, (e) => {
+      //     if (e) console.log(`发送二维码图片到邮箱 ${this.receiver} 失败`, e);
+      //   });
+      // } else {
+      //   qrcode.generate(qrcodeUrl.replace('/qrcode/', '/l/'));
+      // }
+
+      // limit check times
+      this.checkTimes = 0;
+      while (true) {
+        const loginCode = await this.checkLoginStep();
+        if (loginCode === 200) break;
+
+        if (loginCode !== 201) this.checkTimes += 1;
+
+        if (this.checkTimes > 6) {
+          console.log('检查登录状态次数超出限制，重新获取二维码');
+          this.init();
+          return;
+        }
+      }
+
+      try {
+        console.log('正在获取凭据...');
+        await this.fetchTickets();
+        console.log('获取凭据成功!');
+      } catch (e) {
+        console.log('鉴权失败，正在重新登录...', e);
+        this.init();
+        return;
+      }
+      console.log('Looping..');
+      this.loop();
+    }
+
+    async loop(){
+      console.log('正在初始化参数...');
+      try {
+        await this.webwxinit();
+      } catch (e) {
+        console.log('登录信息已失效，正在重新获取二维码...');
+        this.init();
+        return;
+      }
+
+      console.log('初始化成功!');
+
+      try {
+        console.log('正在通知客户端网页端已登录...');
+        await this.notifyMobile();
+
+        console.log('正在获取通讯录列表...');
+        await this.fetchContact();
+      } catch (e) {
+        console.log('初始化信息失败，正在重试');
+        this.loop();
+      }
+
+      console.log('通知成功!');
+      console.log('获取通讯录列表成功!');
+
+      this.pushHost = await this.lookupSyncCheckHost();
+
+      URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
+
+      this.syncCheck();
+
+      // auto update Contacts every ten minute
+      // this.updataContactTimer = setInterval(() => {
+      //   this.updateContact();
+      // },  1000 * 60 * 10);
+    }
 }
 
 

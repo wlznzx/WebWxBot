@@ -44,7 +44,6 @@ class WxDao{
 
 	async updateGroupMembers(query,updateQuery){
 		await this.GroupMembers.update(query,updateQuery,{upsert: true});
-		console.log('updateGroupMembers end.');
 	}
 }
 
