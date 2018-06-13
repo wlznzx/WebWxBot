@@ -14,7 +14,7 @@ const tough = require('tough-cookie');
 const EventEmitter = require('events');
 const Datastore = require('nedb');
 const Promise = require('bluebird');
-const WxDao = require('./wx_dao');
+const getDao = require('./wx_dao');
 
 const {
   getUrls, CODES, SP_ACCOUNTS, PUSH_HOST_LIST,
@@ -48,8 +48,9 @@ class WxModule extends EventEmitter{
 
   constructor(options = {}) {
     super();
-    this.mWxDao = new WxDao();
-    this.mWxDao.initDB();
+    // this.mWxDao = new WxDao();
+    // this.mWxDao.initDB();
+    this.mWxDao = getDao();
   }
 
 	initConfig() {
@@ -66,21 +67,6 @@ class WxModule extends EventEmitter{
 	    this.syncKey = null;
 	    this.formateSyncKey = '';
 	    this.deviceid = makeDeviceID();
-
-	    // member store
-	    // this.Members = new Datastore();
-	    // this.Contacts = new Datastore();
-	    // this.Groups = new Datastore();
-	    // this.GroupMembers = new Datastore();
-	    // this.Brands = new Datastore(); // 公众帐号
-	    // this.SPs = new Datastore(); // 特殊帐号
-
-	    // indexing
-	    // this.Members.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Contacts.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Groups.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.Brands.ensureIndex({ fieldName: 'UserName', unique: true });
-	    // this.SPs.ensureIndex({ fieldName: 'UserName', unique: true });
 
 	    clearTimeout(this.checkSyncTimer);
 	    clearInterval(this.updataContactTimer);
@@ -438,8 +424,6 @@ class WxModule extends EventEmitter{
       }
 
       const { data } = result;
-      // console.log(result);
-      // console.log(data);
 
       if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
         throw new Error('获取通讯录失败');
@@ -522,29 +506,28 @@ class WxModule extends EventEmitter{
     async handleMsg(msg) {
       if (msg.FromUserName.includes('@@')) {
 
-        console.log('msg\n');
-        console.log(msg);
+        // console.log('msg\n');
+        // console.log(msg);
 
         const userId = msg.Content.match(/^(@[a-zA-Z0-9]+|[a-zA-Z0-9_-]+):<br\/>/)[1];
         msg.GroupMember = await this.getGroupMember(userId, msg.FromUserName);
         msg.Group = await this.getGroup(msg.FromUserName);
         msg.Content = msg.Content.replace(/^(@[a-zA-Z0-9]+|[a-zA-Z0-9_-]+):<br\/>/, '');
-        console.log(`
-          来自群 ${msg.Group.NickName} 的消息
-          ${msg.GroupMember.DisplayName || msg.GroupMember.NickName}: ${msg.Content}
-        `);
+        // console.log(`
+        //   来自群 ${msg.Group.NickName} 的消息
+        //   ${msg.GroupMember.DisplayName || msg.GroupMember.NickName}: ${msg.Content}
+        // `);
 
         this.emit('group', msg);
         return;
       }
 
-      console.log("msg.FromUserName = " + msg.FromUserName);
       msg.Member = await this.getMember(msg.FromUserName);
       if (!msg.Member) return;
-      console.log(`
-        新消息
-        ${msg.Member.RemarkName || msg.Member.NickName}: ${msg.Content}
-      `);
+      // console.log(`
+      //   新消息
+      //   ${msg.Member.RemarkName || msg.Member.NickName}: ${msg.Content}
+      // `);
 
       this.emit('friend', msg);
     }
@@ -576,15 +559,15 @@ class WxModule extends EventEmitter{
 
       const { data } = result;
 
-      console.log('fetchBatchgetContact groupIds = ' + groupIds);
-      console.log(result);
+      // console.log('fetchBatchgetContact groupIds = ' + groupIds);
+      // console.log(result);
 
       if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
         throw new Error('Fetch batchgetcontact fail');
       }
 
-      console.log('data\n');
-      console.log(data);
+      // console.log('data\n');
+      // console.log(data);
 
       data.ContactList.forEach((Group) => {
         this.mWxDao.Groups.insert(Group);
@@ -593,25 +576,17 @@ class WxModule extends EventEmitter{
 
         const { MemberList } = Group;
         MemberList.forEach((member) => {
-        this.mWxDao.GroupMembers.update({
-          UserName: member.UserName,
-          GroupUserName: member.GroupUserName,
-        }, member, { upsert: true });
-          //   this.mWxDao.updateGroupMembers({
-          //   UserName: member.UserName,
-          //   GroupUserName: member.GroupUserName,
-          // }, member, { upsert: true });
+            this.mWxDao.updateGroupMembers({
+            UserName: member.UserName,
+            GroupUserName: member.GroupUserName,
+          }, member);
         });
       });
     }
 
-    /*
-      
-    */
     async getMember(id) {
       // GetMambers From DB.
       const member = await this.mWxDao.getMember(id);
-      // const member = await this.Members.findOneAsync({ UserName: id });
       return member;
     }
 
@@ -630,22 +605,19 @@ class WxModule extends EventEmitter{
     }
 
     async getGroupMember(id, groupId) {
-      console.log('getGroupMember step1');
-      let member = await this.mWxDao.GroupMembers.findOneAsync({
-        UserName: id,
-        GroupUserName: groupId,
-      });
+      // console.log('getGroupMember step1');
+      let member = await this.mWxDao.getGroupMember(id);
       if (member) return member;
-      console.log('getGroupMember step2');
+      // console.log('getGroupMember step2');
       try {
         await this.fetchBatchgetContact([groupId]);
       } catch (e) {
         console.log('fetchBatchgetContact error', e);
         return null;
-      }
-      console.log('getGroupMember step3');
-      member = await this.mWxDao.GroupMembers.findOneAsync({ UserName: id });
-      console.log('getGroupMember step4 member');
+      } 
+      // console.log('getGroupMember step3');
+      member = await this.mWxDao.getGroupMember(id);
+      // console.log('getGroupMember step4 member');
       console.log(member);
       return member;
     }

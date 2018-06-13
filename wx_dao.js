@@ -8,7 +8,7 @@ class WxDao{
 	    this.Members = new Datastore(); // 所有成员
 	    this.Contacts = new Datastore(); // 联系人
 	    this.Groups = new Datastore();	// 讨论组信息
-	    // this.GroupMembers = new Datastore({filename:'E:/NodeJSCode/db/groups_bot.db',autoload: true });
+	    // this.GroupMembers = new Datastore({filename:'E:/NodeJSCode/db/GroupMembers.db',autoload: true });
 	    this.GroupMembers = new Datastore(); // 讨论组成员信息
 	    this.Brands = new Datastore(); // 公众帐号
 	    this.SPs = new Datastore(); // 特殊帐号
@@ -24,8 +24,6 @@ class WxDao{
     	// initDB();
   	}
 
-	
-
 	async getMember(id) {
     	const member = await this.Members.findOneAsync({ UserName: id });
     	return member;
@@ -38,17 +36,28 @@ class WxDao{
 
 	async getGroupMember(id, groupId) {
 	    let member = await this.GroupMembers.findOneAsync({
-	      UserName: id,
-	      GroupUserName: groupId,
+	      UserName: id
+	      // GroupUserName: groupId,
 		});
 		if (member) return member;
 	}
 
-	async updateGroupMembers(argument){
-		this.GroupMembers.update(argument);
+	async updateGroupMembers(query,updateQuery){
+		await this.GroupMembers.update(query,updateQuery,{upsert: true});
+		console.log('updateGroupMembers end.');
 	}
-
-	
 }
 
-module.exports = WxDao;
+let singleton = null;
+
+function getInstance(){
+	if(singleton == null){
+		singleton = new WxDao();
+		singleton.initDB();
+	}else{
+
+	}
+	return singleton;
+}
+
+module.exports = getInstance;
