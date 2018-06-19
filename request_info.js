@@ -11,5 +11,4 @@ let RequestInfo = {
       'Referer': 'https://wx2.qq.com/'
     }
 }
-
 module.exports = RequestInfo;

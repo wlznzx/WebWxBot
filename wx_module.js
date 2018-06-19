@@ -399,7 +399,7 @@ class WxModule extends EventEmitter{
       clearTimeout(this.checkSyncTimer);
       this.checkSyncTimer = setTimeout(() => {
         this.syncCheck();
-      }, 3e3);
+      }, 800);
     }
 
     async fetchContact() {
@@ -733,7 +733,6 @@ class WxModule extends EventEmitter{
         this.init();
         return;
       }
-      console.log('Looping..');
       this.loop();
     }
 
@@ -750,7 +749,7 @@ class WxModule extends EventEmitter{
       console.log('初始化成功!');
 
       try {
-        console.log('正在通知客户端网页端已登录...');
+        // console.log('正在通知客户端网页端已登录...');
         await this.notifyMobile();
 
         console.log('正在获取通讯录列表...');
@@ -760,19 +759,55 @@ class WxModule extends EventEmitter{
         this.loop();
       }
 
-      console.log('通知成功!');
-      console.log('获取通讯录列表成功!');
+      // console.log('通知成功!');
+      // console.log('获取通讯录列表成功!');
 
       this.pushHost = await this.lookupSyncCheckHost();
 
       URLS = getUrls({ baseHost: this.baseHost, pushHost: this.pushHost });
 
+
+      console.log('循环读取信息......');
       this.syncCheck();
 
       // auto update Contacts every ten minute
       // this.updataContactTimer = setInterval(() => {
       //   this.updateContact();
       // },  1000 * 60 * 10);
+    }
+
+    sendText(to, content, callback) {
+      const clientMsgId = (+new Date + Math.random().toFixed(3)).replace('.', '');
+      req.post(URLS.API_webwxsendmsg,
+        {
+          BaseRequest: this.baseRequest,
+          Msg: {
+            Type: CODES.MSGTYPE_TEXT,
+            Content: content,
+            FromUserName: this.my.UserName,
+            ToUserName: to,
+            LocalID: clientMsgId,
+            ClientMsgId: clientMsgId,
+          },
+        },
+        {
+          params: {
+            pass_ticket: this.passTicket,
+          },
+        }
+      ).then((result) => {
+        const { data } = result;
+        callback = callback || (() => (null));
+        if (!data || !data.BaseResponse || data.BaseResponse.Ret !== 0) {
+          return callback(new Error('Send text fail'));
+        }
+        callback();
+      }).catch((e) => {
+        console.log('send text network error', e);
+        // network error, retry
+        this.sendText(to, content, callback);
+        return;
+      });
     }
 }
 
